@@ -165,6 +165,48 @@ class ProcessPipeline():
             tpl_pose_meta0 = self.pose2d(frames[:1])[0]
             tpl_pose_metas = self.pose2d(frames)
 
+            ##################################################
+            # Saving original video
+            print("Saving original video")
+            tpl_pose_metas_to_save = [AAPoseMeta.from_humanapi_meta(meta) for meta in tpl_pose_metas]
+
+            tpl_pose_metas_list_to_save = []
+            for idx, meta in enumerate(tpl_pose_metas_to_save):
+                canvas = np.zeros_like(frames[0])
+                image = draw_aapose_by_meta_new(canvas, meta)
+                image = padding_resize(image, refer_img.shape[0], refer_img.shape[1])
+                tpl_pose_metas_list_to_save.append(image)
+
+            original_video_pose_path = os.path.join(output_path, 'original_video_pose.mp4')
+            mpy.ImageSequenceClip(tpl_pose_metas_list_to_save, fps=fps).write_videofile(original_video_pose_path)
+            ##################################################
+
+            ##################################################
+            # Saving original first frame
+            print("Saving original first frame")
+            tpl_pose_meta0_so_save = AAPoseMeta.from_humanapi_meta(tpl_pose_meta0)
+
+            # canvas = np.zeros_like(frames[0])
+            image = draw_aapose_by_meta_new(frames[0].copy(), tpl_pose_meta0_so_save) 
+
+            image = Image.fromarray(image)
+            image_path = os.path.join(output_path, 'original_first_frame_pose.png')
+            image.save(image_path)
+            ##################################################
+
+            ##################################################
+            # Saving original refer image
+            print("Saving original refer image")
+            refer_pose_meta_so_save = AAPoseMeta.from_humanapi_meta(refer_pose_meta)
+
+            # canvas = np.zeros_like(refer_img)
+            image = draw_aapose_by_meta_new(refer_img.copy(), refer_pose_meta_so_save) 
+
+            image = Image.fromarray(image)
+            image_path = os.path.join(output_path, 'original_refer_pose.png')
+            image.save(image_path)
+            ##################################################
+
             face_images = []
             for idx, meta in enumerate(tpl_pose_metas):
                 face_bbox_for_image = get_face_bboxes(meta['keypoints_face'][:, :2], scale=1.3,
@@ -209,10 +251,32 @@ class ProcessPipeline():
                     tpl_edit_path = os.path.join(output_path, 'tpl_edit.png')
                     tpl_edit.save(tpl_edit_path)
                     tpl_edit_pose_meta0 = self.pose2d([np.array(tpl_edit)])[0]
+
+                    ##################################################
+                    # Saving original first frame
+                    print("Saving edit first frame")
+                    tpl_edit_pose_meta0_to_save = AAPoseMeta.from_humanapi_meta(tpl_edit_pose_meta0)
+                    image = draw_aapose_by_meta_new(np.array(tpl_edit.copy()), tpl_edit_pose_meta0_to_save)
+                    image = Image.fromarray(image)
+                    image_path = os.path.join(output_path, 'edit_first_frame_pose.png')
+                    image.save(image_path)
+                    ##################################################
+
+                    ##################################################
+                    # Saving original refer image
+                    print("Saving edit refer image")
+                    refer_edit_pose_meta_to_save = AAPoseMeta.from_humanapi_meta(refer_edit_pose_meta)
+                    image = draw_aapose_by_meta_new(np.array(refer_edit.copy()), refer_edit_pose_meta_to_save)
+                    image = Image.fromarray(image)
+                    image_path = os.path.join(output_path, 'edit_refer_pose.png')
+                    image.save(image_path)
+                    ##################################################
+
                     tpl_retarget_pose_metas = get_retarget_pose(tpl_pose_meta0, refer_pose_meta, tpl_pose_metas, tpl_edit_pose_meta0, refer_edit_pose_meta)
                 else:
                     tpl_retarget_pose_metas = get_retarget_pose(tpl_pose_meta0, refer_pose_meta, tpl_pose_metas, None, None)
             else:
+               # transform from meta dictionary to meta class
                tpl_retarget_pose_metas = [AAPoseMeta.from_humanapi_meta(meta) for meta in tpl_pose_metas]
 
             cond_images = []
@@ -239,10 +303,12 @@ class ProcessPipeline():
         leg_visible = False
         for tpl_pose_meta in tpl_pose_metas:
             tpl_keypoints = tpl_pose_meta['keypoints_body']
+            # [3, 4, 6, 7] --> [RElbow, RWrist, LElbow, LWrist]
             if tpl_keypoints[3].all() != 0 or tpl_keypoints[4].all() != 0 or tpl_keypoints[6].all() != 0 or tpl_keypoints[7].all() != 0:
                 if (tpl_keypoints[3][0] <= 1 and tpl_keypoints[3][1] <= 1 and tpl_keypoints[3][2] >= 0.75) or (tpl_keypoints[4][0] <= 1 and tpl_keypoints[4][1] <= 1 and tpl_keypoints[4][2] >= 0.75) or \
                     (tpl_keypoints[6][0] <= 1 and tpl_keypoints[6][1] <= 1 and tpl_keypoints[6][2] >= 0.75) or (tpl_keypoints[7][0] <= 1 and tpl_keypoints[7][1] <= 1 and tpl_keypoints[7][2] >= 0.75):
                     arm_visible = True
+            # [9, 10, 12, 13] --> [RKnee, RAnkle, LKnee, LAnkle]
             if tpl_keypoints[9].all() != 0 or tpl_keypoints[12].all() != 0 or tpl_keypoints[10].all() != 0 or tpl_keypoints[13].all() != 0:
                 if (tpl_keypoints[9][0] <= 1 and tpl_keypoints[9][1] <= 1 and tpl_keypoints[9][2] >= 0.75) or (tpl_keypoints[12][0] <= 1 and tpl_keypoints[12][1] <= 1 and tpl_keypoints[12][2] >= 0.75) or \
                     (tpl_keypoints[10][0] <= 1 and tpl_keypoints[10][1] <= 1 and tpl_keypoints[10][2] >= 0.75) or (tpl_keypoints[13][0] <= 1 and tpl_keypoints[13][1] <= 1 and tpl_keypoints[13][2] >= 0.75):
@@ -250,6 +316,7 @@ class ProcessPipeline():
             if arm_visible and leg_visible:
                 break
         
+        # what are the width and height here referring to? most probably the width/height of the image itself
         if leg_visible:
             if tpl_pose_meta['width'] > tpl_pose_meta['height']:
                 tpl_prompt = "Change the person to a standard T-pose (facing forward with arms extended). The person is standing. Feet and Hands are visible in the image."
@@ -276,7 +343,7 @@ class ProcessPipeline():
 
         return tpl_prompt, refer_prompt
     
-
+    # used in replacement
     def get_mask(self, frames, th_step, kp2ds_all):
         frame_num = len(frames)
         if frame_num < th_step:
@@ -342,6 +409,7 @@ class ProcessPipeline():
 
         return all_mask
     
+    # not used
     def convert_list_to_array(self, metas):
         metas_list = []
         for meta in metas:

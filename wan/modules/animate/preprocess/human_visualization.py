@@ -189,7 +189,7 @@ def draw_ellipse_by_2kp(img, keypoint1, keypoint2, color, threshold=0.6):
     cv2.fillConvexPoly(img, polygon, [int(float(c) * 0.6) for c in color])
     return img
 
-
+# not used
 def split_pose2d_kps_to_aa(kp2ds: np.ndarray) -> List[np.ndarray]:
     """Convert the 133 keypoints from pose2d to body and hands keypoints.
 
@@ -223,6 +223,7 @@ def draw_aapose_by_meta_new(img, meta: AAPoseMeta, threshold=0.5, stickwidth_typ
                                stickwidth_type=stickwidth_type, draw_hand=draw_hand, draw_head=draw_head)
     return pose_img
 
+# not used
 def draw_hand_by_meta(img, meta: AAPoseMeta, threshold=0.5, stick_width_norm=200):
     kp2ds = np.concatenate([meta.kps_body, meta.kps_body_p[:, None] * 0], axis=1)
     kp2ds_lhand = np.concatenate([meta.kps_lhand, meta.kps_lhand_p[:, None]], axis=1)
@@ -230,7 +231,7 @@ def draw_hand_by_meta(img, meta: AAPoseMeta, threshold=0.5, stick_width_norm=200
     pose_img = draw_aapose(img, kp2ds, threshold, kp2ds_lhand=kp2ds_lhand, kp2ds_rhand=kp2ds_rhand, stick_width_norm=stick_width_norm, draw_hand=True, draw_head=False)
     return pose_img
 
-
+# not used
 def draw_aaface_by_meta(img, meta: AAPoseMeta, threshold=0.5, stick_width_norm=200, draw_hand=False, draw_head=True):
     kp2ds = np.concatenate([meta.kps_body, meta.kps_body_p[:, None]], axis=1)
     # kp2ds_lhand = np.concatenate([meta.kps_lhand, meta.kps_lhand_p[:, None]], axis=1)
@@ -238,7 +239,7 @@ def draw_aaface_by_meta(img, meta: AAPoseMeta, threshold=0.5, stick_width_norm=2
     pose_img = draw_M(img, kp2ds, threshold, kp2ds_lhand=None, kp2ds_rhand=None, stick_width_norm=stick_width_norm, draw_hand=draw_hand, draw_head=draw_head)
     return pose_img
 
-
+# not used
 def draw_aanose_by_meta(img, meta: AAPoseMeta, threshold=0.5, stick_width_norm=100, draw_hand=False):
     kp2ds = np.concatenate([meta.kps_body, meta.kps_body_p[:, None]], axis=1)
     # kp2ds_lhand = np.concatenate([meta.kps_lhand, meta.kps_lhand_p[:, None]], axis=1)
@@ -246,12 +247,12 @@ def draw_aanose_by_meta(img, meta: AAPoseMeta, threshold=0.5, stick_width_norm=1
     pose_img = draw_nose(img, kp2ds, threshold, kp2ds_lhand=None, kp2ds_rhand=None, stick_width_norm=stick_width_norm, draw_hand=draw_hand)
     return pose_img
 
-
+# not used
 def gen_face_motion_seq(img, metas: List[AAPoseMeta], threshold=0.5, stick_width_norm=200):
 
     return 
 
-
+# used by non used functions (not used)
 def draw_M(
     img,
     kp2ds,
@@ -917,14 +918,14 @@ def draw_aapose_new(
             }
     return img
 
-
+# not used
 def draw_bbox(img, bbox, color=(255, 0, 0)):
     img = load_image(img)
     bbox = [int(bbox_tmp) for bbox_tmp in bbox]
     cv2.rectangle(img, (bbox[0], bbox[1]), (bbox[2], bbox[3]), color, 2)
     return img
 
-
+# not used
 def draw_kp2ds(img, kp2ds, threshold=0, color=(255, 0, 0), skeleton=None, reverse=False):
     img = load_image(img, reverse)
 
@@ -1018,7 +1019,7 @@ def draw_kp2ds(img, kp2ds, threshold=0, color=(255, 0, 0), skeleton=None, revers
 
     return img
 
-
+# not used
 def draw_mask(img, mask, background=0, return_rgba=False):
     img = load_image(img)
     h, w, _ = img.shape
@@ -1028,7 +1029,7 @@ def draw_mask(img, mask, background=0, return_rgba=False):
     img_rgba = np.concatenate([img, mask], -1)
     return alphaMerge(img_rgba, background, 0, 0, return_rgba=True)
 
-
+# not used
 def draw_pcd(pcd_list, save_path=None):
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
@@ -1057,7 +1058,7 @@ def load_image(img, reverse=False):
         img = img.astype(np.uint8)
     return img
 
-
+# not used
 def draw_skeleten(meta):
     kps = []
     for i, kp in enumerate(meta["keypoints_body"]):
@@ -1081,7 +1082,7 @@ def draw_skeleten(meta):
     )
     return pose_img
 
-
+# not used
 def draw_skeleten_with_pncc(pncc: np.ndarray, meta: Dict) -> np.ndarray:
     """
     Args:
@@ -1143,7 +1144,7 @@ FACE_CUSTOM_STYLE = {
     "mouth_inside": {"indexs": [60, 61, 62, 63, 64, 65, 66, 67], "color": [255, 100, 50], "close": True},
 }
 
-
+# not used
 def draw_face_kp(img, kps, thickness=2, style=FACE_CUSTOM_STYLE):
     """
     Args:
@@ -1283,7 +1284,7 @@ if __name__ == "__main__":
         "height": 540,
         "width": 414,
         "category_id": 1,
-        "keypoints_body": [
+        "keypoints_body": [ # length: 20
             [0.5084776947463768, 0.11350188078703703],
             [0.504467655495169, 0.20419560185185184],
             [0.3982016153381642, 0.198046875],
@@ -1305,7 +1306,7 @@ if __name__ == "__main__":
             [0.4994551064311594, 0.9405056423611111],
             [0.4152442821557971, 0.9312825520833333],
         ],
-        "keypoints_left_hand": [
+        "keypoints_left_hand": [ # length: 21
             [267.78515625, 263.830078125, 1.2840936183929443],
             [265.294921875, 269.640625, 1.2546794414520264],
             [263.634765625, 277.111328125, 1.2863062620162964],
@@ -1328,7 +1329,7 @@ if __name__ == "__main__":
             [265.294921875, 287.90234375, 1.0219476222991943],
             [262.8046875, 287.072265625, 0.9240120053291321],
         ],
-        "keypoints_right_hand": [
+        "keypoints_right_hand": [ # length: 21
             [161.53515625, 258.849609375, 1.2069408893585205],
             [168.17578125, 263.0, 1.1846840381622314],
             [173.986328125, 269.640625, 1.1435924768447876],

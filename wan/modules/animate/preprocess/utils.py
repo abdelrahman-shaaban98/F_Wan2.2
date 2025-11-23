@@ -5,6 +5,7 @@ import math
 import random
 import numpy as np
 
+# used in replacement
 def get_mask_boxes(mask):
     """
 
@@ -21,7 +22,7 @@ def get_mask_boxes(mask):
     bbox = np.array([x_min, y_min, x_max, y_max]).astype(np.int32)
     return bbox
 
-
+# used in replacement
 def get_aug_mask(body_mask, w_len=10, h_len=20):
     body_bbox = get_mask_boxes(body_mask)
 
@@ -41,6 +42,7 @@ def get_aug_mask(body_mask, w_len=10, h_len=20):
 
     return body_mask
     
+# used in replacement
 def get_mask_body_img(img_copy, hand_mask, k=7, iterations=1):
     kernel = np.ones((k, k), np.uint8)
     dilation = cv2.dilate(hand_mask, kernel, iterations=iterations)

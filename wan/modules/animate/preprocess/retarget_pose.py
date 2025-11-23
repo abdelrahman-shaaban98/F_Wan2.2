@@ -9,9 +9,9 @@ from typing import NamedTuple, List
 import copy
 from pose2d_utils import AAPoseMeta
 
-
+# not used
 # load skeleton name and bone lines
-keypoint_list = [
+keypoint_list = [ # length = 20
         "Nose",
         "Neck",
         "RShoulder",
@@ -34,8 +34,8 @@ keypoint_list = [
         "RToe",
 ]
 
-
-limbSeq = [
+# These limbs are the ones exactly shown in the saved pose video 
+limbSeq = [ # one-based index
     [2, 3], [2, 6],     # shoulders
     [3, 4], [4, 5],     # left arm
     [6, 7], [7, 8],     # right arm
@@ -76,7 +76,7 @@ def get_length(skeleton, limb):
     return X, Y, length
 
 
-
+# Transfrom old keypoints by delta, src_H, src_W to get new_keypoints
 def get_handpose_meta(keypoints, delta, src_H, src_W):
 
     new_keypoints = []
@@ -103,6 +103,7 @@ def get_handpose_meta(keypoints, delta, src_H, src_W):
     return new_keypoints
 
 
+# Scales and aligns left/right hand keypoints using bone ratios.
 def deal_hand_keypoints(hand_res, r_ratio, l_ratio, hand_score_th = 0.5):
 
     left_hand = []
@@ -162,6 +163,7 @@ def get_scaled_pose(canvas, src_canvas, keypoints, keypoints_hand, bone_ratio_li
     H, W = canvas
     src_H, src_W = src_canvas
 
+
     new_length_list = [ ] 
     angle_list = [ ]
 
@@ -195,6 +197,13 @@ def get_scaled_pose(canvas, src_canvas, keypoints, keypoints_hand, bone_ratio_li
 
     # Keep foot length within 0.5x calf length
     foot_lower_leg_ratio = 0.5
+    
+    # new_length_list[8] --> right calf
+    # new_length_list[18] --> right foot
+
+    # new_length_list[11] --> left calf
+    # new_length_list[17] --> left foot
+
     if new_length_list[8] != None and new_length_list[18] != None:
         if new_length_list[18] > new_length_list[8] * foot_lower_leg_ratio:
             new_length_list[18] = new_length_list[8] * foot_lower_leg_ratio
@@ -245,7 +254,8 @@ def get_scaled_pose(canvas, src_canvas, keypoints, keypoints_hand, bone_ratio_li
         rescale_keypoints[idx][0] /= scale_min
         rescale_keypoints[idx][1] /= scale_min
 
-    # Scale hand proportions based on body skeletal ratios
+    # Scale hand proportions based on body skelton ratios 
+    # [0, 1] --> [right shoulder, left shoulder] 
     r_ratio = max(bone_ratio_list[0], bone_ratio_list[1]) / scale_min
     l_ratio = max(bone_ratio_list[0], bone_ratio_list[1]) / scale_min
     left_hand, right_hand = deal_hand_keypoints(keypoints_hand, r_ratio, l_ratio, hand_score_th = threshold)
@@ -253,19 +263,27 @@ def get_scaled_pose(canvas, src_canvas, keypoints, keypoints_hand, bone_ratio_li
     left_hand_new = left_hand.copy()
     right_hand_new = right_hand.copy()
 
+    # As the limbs length changed, the wrist keypoint is also changed (due to shortening and extending)
+    # hence, the hands keypoints need to shift by the same wrist shift amount.
+    # [4, 5] --> [right wrist, left wrist]
+    # If hands are not shown,
     if rescale_keypoints[4] == None and rescale_keypoints[7] == None:
+        # print("TEST1")
         pass
 
     elif rescale_keypoints[4] == None and rescale_keypoints[7] != None:
+        # print("TEST2")
         right_hand_delta =  np.array(rescale_keypoints[7][:2]) - np.array(keypoints[7][:2])
         right_hand_new = get_handpose_meta(right_hand, right_hand_delta, src_H, src_W)
 
     elif rescale_keypoints[4] != None and rescale_keypoints[7] == None:
+        # print("TEST3")
         left_hand_delta = np.array(rescale_keypoints[4][:2]) - np.array(keypoints[4][:2]) 
         left_hand_new = get_handpose_meta(left_hand, left_hand_delta, src_H, src_W)
 
     else:
         # get left_hand and right_hand offset 
+        # print("TEST4")
         left_hand_delta = np.array(rescale_keypoints[4][:2]) - np.array(keypoints[4][:2]) 
         right_hand_delta =  np.array(rescale_keypoints[7][:2]) - np.array(keypoints[7][:2])
 
@@ -306,6 +324,7 @@ def get_scaled_pose(canvas, src_canvas, keypoints, keypoints_hand, bone_ratio_li
     return frame_info
 
 
+# Scales body keypoints according to 'bone_ratio_list'.
 def rescale_skeleton(H, W, keypoints, bone_ratio_list):
 
     rescale_keypoints = keypoints.copy()
@@ -366,18 +385,21 @@ def rescale_skeleton(H, W, keypoints, bone_ratio_list):
     return rescale_keypoints
 
 
+# Repairs missing body joints by mirroring symmetric limbs.
 def fix_lack_keypoints_use_sym(skeleton):
 
     keypoints = skeleton['keypoints_body']
     H, W = skeleton['height'], skeleton['width']
 
     limb_points_list = [
-                        [3, 4, 5],
-                        [6, 7, 8],
-                        [12, 13, 14, 19],
-                        [9, 10, 11, 20],
+                        [3, 4, 5],          # RShoulder, RElbow, RWrist
+                        [6, 7, 8],          # LShoulder, LElbow, LWrist
+                        [12, 13, 14, 19],   # LHip, LKnee, LAnkle, LToe
+                        [9, 10, 11, 20],    # RHip, RKnee, RAnkle, RToe
     ]
-
+    # If a missing joint (None) is found inside a limb:
+    # everything below it in the chain is also discarded.
+    # Because if the elbow is missing, the wrist position is meaningless or unreliable
     for limb_points in limb_points_list:
         miss_flag = False
         for point in limb_points:
@@ -420,8 +442,12 @@ def fix_lack_keypoints_use_sym(skeleton):
                     X = np.array([keypoint1_sym[0], keypoint2_sym[0]]) * float(W)
                     Y = np.array([keypoint1_sym[1], keypoint2_sym[1]]) * float(H)
                     ref_length = ((X[0] - X[1]) ** 2 + (Y[0] - Y[1]) ** 2) ** 0.5
-                else:
+                else: 
+                    # If the mirror limb is missing, estimate a percantage of torso
+                    # [1, 8, 11] --> [Nick, RHip, LHip]
+                    # ref_length_left/ref_length_right is calculated as the ditance between the neck and left/right hip
                     ref_length_left, ref_length_right = 0, 0
+
                     if keypoints[1] != None and keypoints[8] != None:
                         X = np.array([keypoints[1][0], keypoints[8][0]]) * float(W)
                         Y = np.array([keypoints[1][1], keypoints[8][1]]) * float(H)
@@ -447,11 +473,14 @@ def fix_lack_keypoints_use_sym(skeleton):
     return skeleton
 
 
+# Each limb has right and left mirrors, adjust the shorter limb to match the longer one.
+# Changes ratio_list only, src_length_lista and dst_length_list are not affected.
 def rescale_shorten_skeleton(ratio_list, src_length_list, dst_length_list):
 
     modify_bone_list = [
-        [0, 1],
-        [2, 4],
+        # each elemnt in the list is a pair between a left and a right limb
+        [0, 1],  # for example, this is left and right shoulders
+        [2, 4], # left and right arm, and so on
         [3, 5],
         [6, 9],
         [7, 10],
@@ -459,16 +488,21 @@ def rescale_shorten_skeleton(ratio_list, src_length_list, dst_length_list):
         [17, 18]
     ]
 
+    # for each shoulder, arm, leg, compare the left and the right and take the largest
     for modify_bone in modify_bone_list:
         new_ratio = max(ratio_list[modify_bone[0]], ratio_list[modify_bone[1]])
         ratio_list[modify_bone[0]] = new_ratio
         ratio_list[modify_bone[1]] = new_ratio
     
+    # ratio_list[13] right nose-eye distance
+    # ratio_list[15] left nose-eye distance
     if ratio_list[13]!= None and ratio_list[15]!= None:
         ratio_eye_avg = (ratio_list[13] + ratio_list[15]) / 2
         ratio_list[13] = ratio_eye_avg
         ratio_list[15] = ratio_eye_avg
 
+    # ratio_list[14] right eye-ear distance
+    # ratio_list[16] left eye-ear distance
     if ratio_list[14]!= None and ratio_list[16]!= None:
         ratio_eye_avg = (ratio_list[14] + ratio_list[16]) / 2
         ratio_list[14] = ratio_eye_avg
@@ -477,7 +511,7 @@ def rescale_shorten_skeleton(ratio_list, src_length_list, dst_length_list):
     return ratio_list, src_length_list, dst_length_list
 
 
-
+#Determines if skeleton is full-body, ¾, or half-body based on visible keypoints.
 def check_full_body(keypoints, threshold = 0.4):
 
     body_flag = 'half_body'
@@ -498,6 +532,8 @@ def check_full_body(keypoints, threshold = 0.4):
     return body_flag
 
 
+# Check two body flags and return the minimum
+# If given 'full_body' and 'half_body", it returns 'half_body'
 def check_full_body_both(flag1, flag2):
     body_flag_dict = {
         'full_body': 2,
@@ -547,10 +583,10 @@ def write_to_poses(data_to_json, none_idx, dst_shape, bone_ratio_list, delta_gro
 
     return outputs
 
-
+# Calculates global scale difference between two skeletons based on head width or shoulders.
 def calculate_scale_ratio(skeleton, skeleton_edit, scale_ratio_flag):
     if scale_ratio_flag:
-
+        # [0, 14, 15, 16, 17] --> [Nose, REye, LEye, REar, LEar] --> head keypoints 
         headw = max(skeleton['keypoints_body'][0][0], skeleton['keypoints_body'][14][0], skeleton['keypoints_body'][15][0], skeleton['keypoints_body'][16][0], skeleton['keypoints_body'][17][0]) - \
                     min(skeleton['keypoints_body'][0][0], skeleton['keypoints_body'][14][0], skeleton['keypoints_body'][15][0], skeleton['keypoints_body'][16][0], skeleton['keypoints_body'][17][0])
         headw_edit = max(skeleton_edit['keypoints_body'][0][0], skeleton_edit['keypoints_body'][14][0], skeleton_edit['keypoints_body'][15][0], skeleton_edit['keypoints_body'][16][0], skeleton_edit['keypoints_body'][17][0]) - \
@@ -578,6 +614,11 @@ def retarget_pose(src_skeleton, dst_skeleton, all_src_skeleton, src_skeleton_edi
     src_skeleton_ori = copy.deepcopy(src_skeleton)
 
     dst_skeleton_ori_h, dst_skeleton_ori_w = dst_skeleton['height'], dst_skeleton['width']
+    # [0]  --> nose
+    # [10] --> right ankle
+    # [13] --> left ankle
+    # [8]  --> right hip
+    # [11] --> left hip
     if src_skeleton['keypoints_body'][0] != None and src_skeleton['keypoints_body'][10] != None and src_skeleton['keypoints_body'][13] != None and \
         dst_skeleton['keypoints_body'][0] != None and dst_skeleton['keypoints_body'][10] != None and dst_skeleton['keypoints_body'][13] != None and \
             src_skeleton['keypoints_body'][0][2] > 0.5 and src_skeleton['keypoints_body'][10][2] > 0.5 and src_skeleton['keypoints_body'][13][2] > 0.5 and \
@@ -590,6 +631,7 @@ def retarget_pose(src_skeleton, dst_skeleton, all_src_skeleton, src_skeleton_edi
             (dst_skeleton['keypoints_body'][10][1] + dst_skeleton['keypoints_body'][13][1]) / 2 -
             dst_skeleton['keypoints_body'][0][1])
         scale_min = 1.0 * src_height / dst_height
+
     elif src_skeleton['keypoints_body'][0] != None and src_skeleton['keypoints_body'][8] != None and src_skeleton['keypoints_body'][11] != None and \
         dst_skeleton['keypoints_body'][0] != None and dst_skeleton['keypoints_body'][8] != None and dst_skeleton['keypoints_body'][11] != None and \
             src_skeleton['keypoints_body'][0][2] > 0.5 and src_skeleton['keypoints_body'][8][2] > 0.5 and src_skeleton['keypoints_body'][11][2] > 0.5 and \
@@ -607,6 +649,8 @@ def retarget_pose(src_skeleton, dst_skeleton, all_src_skeleton, src_skeleton_edi
     
     if use_edit_for_base:
         scale_ratio_flag = False
+        # [0, 10, 13] --> [Nose, RAnkle, LAnkle]
+        # So, it calculates the height as the distance between the Nose and the midpoint of RAnkle and LAnkle
         if src_skeleton_edit['keypoints_body'][0] != None and src_skeleton_edit['keypoints_body'][10] != None and src_skeleton_edit['keypoints_body'][13] != None and \
             dst_skeleton_edit['keypoints_body'][0] != None and dst_skeleton_edit['keypoints_body'][10] != None and dst_skeleton_edit['keypoints_body'][13] != None and \
                 src_skeleton_edit['keypoints_body'][0][2] > 0.5 and src_skeleton_edit['keypoints_body'][10][2] > 0.5 and src_skeleton_edit['keypoints_body'][13][2] > 0.5 and \
@@ -619,6 +663,9 @@ def retarget_pose(src_skeleton, dst_skeleton, all_src_skeleton, src_skeleton_edi
                 (dst_skeleton_edit['keypoints_body'][10][1] + dst_skeleton_edit['keypoints_body'][13][1]) / 2 -
                 dst_skeleton_edit['keypoints_body'][0][1])
             scale_min_edit = 1.0 * src_height_edit / dst_height_edit
+
+        # [0, 8, 11] --> [Nose, RHip, LHip]
+        # So, it calculates the height as the distance between the Nose and the midpoint of RHip and LHip
         elif src_skeleton_edit['keypoints_body'][0] != None and src_skeleton_edit['keypoints_body'][8] != None and src_skeleton_edit['keypoints_body'][11] != None and \
             dst_skeleton_edit['keypoints_body'][0] != None and dst_skeleton_edit['keypoints_body'][8] != None and dst_skeleton_edit['keypoints_body'][11] != None and \
                 src_skeleton_edit['keypoints_body'][0][2] > 0.5 and src_skeleton_edit['keypoints_body'][8][2] > 0.5 and src_skeleton_edit['keypoints_body'][11][2] > 0.5 and \
@@ -631,6 +678,9 @@ def retarget_pose(src_skeleton, dst_skeleton, all_src_skeleton, src_skeleton_edi
                 (dst_skeleton_edit['keypoints_body'][8][1] + dst_skeleton_edit['keypoints_body'][11][1]) / 2 -
                 dst_skeleton_edit['keypoints_body'][0][1])
             scale_min_edit = 1.0 * src_height_edit / dst_height_edit
+        
+        # If the ankles and hips not in the extracted keypoints, use height and width to get the scale ratio
+        # and by making scale_ratio_flag = True, it will use the heads or shoulders width to get an estimate for the ratio
         else:
             scale_min_edit = np.sqrt(src_skeleton_edit['height'] * src_skeleton_edit['width']) / np.sqrt(dst_skeleton_edit['height'] * dst_skeleton_edit['width'])
             scale_ratio_flag = True
@@ -703,21 +753,34 @@ def retarget_pose(src_skeleton, dst_skeleton, all_src_skeleton, src_skeleton_edi
         src_length_list.append(src_length)
         dst_length_list.append(dst_length)
     
+    # if a limb ratio is missing, replace it with the average of the shoulder limbs length
     for idx, ratio in enumerate(ratio_list):
+        print(1)
         if ratio == -1:
+            print(idx)
             if ratio_list[0] != -1 and ratio_list[1] != -1:
                 ratio_list[idx] = (ratio_list[0] + ratio_list[1]) / 2
+                print(idx, ratio_list[idx])
 
     # Consider adding constraints when Flux fails to correct head pose, causing neck issues.
     # if ratio_list[12] > (ratio_list[0]+ratio_list[1])/2*1.25:
     #     ratio_list[12] = (ratio_list[0]+ratio_list[1])/2*1.25
     
+    # Changes ratio_list only, src_length_list and dst_length_list are not affected.
     ratio_list, src_length_list, dst_length_list = rescale_shorten_skeleton(ratio_list, src_length_list, dst_length_list)
 
     rescaled_src_skeleton_ori = rescale_skeleton(src_skeleton_ori['height'], src_skeleton_ori['width'],
                                                  src_skeleton_ori['keypoints_body'], ratio_list)
 
     # get global translation offset_x and offset_y
+
+    # [10] --> right ankle
+    # [13] --> left ankle
+    # [8]  --> right hip
+    # [11] --> left hip
+    # [18]  --> left toe
+    # [19] --> right toe
+    ##################################################
     if body_flag == 'full_body':
         #print('use foot mark.')
         dst_ground_y = max(dst_skeleton['keypoints_body'][10][1], dst_skeleton['keypoints_body'][13][1]) * dst_skeleton[
@@ -749,7 +812,7 @@ def retarget_pose(src_skeleton, dst_skeleton, all_src_skeleton, src_skeleton_edi
         delta_neck_x = src_neck_x - dst_neck_x * dst_skeleton['width']
         delta_x, delta_y = delta_neck_x, delta_neck_y
         rescaled_src_ground_x = src_neck_x
-
+    ##################################################
 
     dst_shape = (dst_skeleton_ori_w, dst_skeleton_ori_h)
     output = write_to_poses(all_src_skeleton, none_idx, dst_shape, ratio_list, delta_x, delta_y,
@@ -759,6 +822,7 @@ def retarget_pose(src_skeleton, dst_skeleton, all_src_skeleton, src_skeleton_edi
 
 def get_retarget_pose(tpl_pose_meta0, refer_pose_meta, tpl_pose_metas, tql_edit_pose_meta0, refer_edit_pose_meta):
 
+    # Denormalize the hands keypoints, and convert from ndarray to list
     for key, value in tpl_pose_meta0.items():
         if type(value) is np.ndarray:
             if key in ['keypoints_left_hand', 'keypoints_right_hand']:
@@ -767,6 +831,7 @@ def get_retarget_pose(tpl_pose_meta0, refer_pose_meta, tpl_pose_metas, tql_edit_
                 value = value.tolist()
         tpl_pose_meta0[key] = value
 
+    
     for key, value in refer_pose_meta.items():
         if type(value) is np.ndarray:
             if key in ['keypoints_left_hand', 'keypoints_right_hand']:

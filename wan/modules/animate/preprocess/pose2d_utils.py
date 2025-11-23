@@ -46,6 +46,8 @@ class AAPoseMeta:
         self.kps_lhand: np.ndarray = None
         self.kps_rhand: np.ndarray = None
         self.kps_face: np.ndarray = None
+
+
         self.kps_body_p: np.ndarray = None
         self.kps_lhand_p: np.ndarray = None
         self.kps_rhand_p: np.ndarray = None
@@ -57,6 +59,7 @@ class AAPoseMeta:
         elif kp2ds is not None:
             self.load_from_kp2ds(kp2ds)
     
+    # not used
     def is_valid(self, kp, p, threshold):
         x, y = kp
         if x < 0 or y < 0 or x > self.width or y > self.height or p < threshold: 
@@ -64,6 +67,7 @@ class AAPoseMeta:
         else:
             return True
     
+    # not used
     def get_bbox(self, kp, kp_p, threshold=0.5):
         kps = kp[kp_p > threshold]
         if kps.size == 0:
@@ -94,7 +98,7 @@ class AAPoseMeta:
         self.height = height
         return self
 
-    
+    # note used
     def get_kps_body_with_p(self, normalize=False):
         kps_body = self.kps_body.copy()
         if normalize:
@@ -102,6 +106,7 @@ class AAPoseMeta:
 
         return np.concatenate([kps_body, self.kps_body_p[:, None]])
     
+    # not used
     @staticmethod
     def from_kps_face(kps_face: np.ndarray, height: int, width: int):
 
@@ -115,6 +120,7 @@ class AAPoseMeta:
         pose_meta.width = width
         return pose_meta
 
+    # not used
     @staticmethod
     def from_kps_body(kps_body: np.ndarray, height: int, width: int):
 
@@ -124,23 +130,29 @@ class AAPoseMeta:
         pose_meta.height = height
         pose_meta.width = width
         return pose_meta
+    
     @staticmethod
     def from_humanapi_meta(meta):
         pose_meta = AAPoseMeta()
         width, height = meta["width"], meta["height"]
         pose_meta.width = width
         pose_meta.height = height
+
         pose_meta.kps_body = meta["keypoints_body"][:, :2] * (width, height)
         pose_meta.kps_body_p = meta["keypoints_body"][:, 2]
+
         pose_meta.kps_lhand = meta["keypoints_left_hand"][:, :2] * (width, height)
         pose_meta.kps_lhand_p = meta["keypoints_left_hand"][:, 2]
+
         pose_meta.kps_rhand = meta["keypoints_right_hand"][:, :2] * (width, height)
         pose_meta.kps_rhand_p = meta["keypoints_right_hand"][:, 2]
+        
         if 'keypoints_face' in meta:
             pose_meta.kps_face = meta["keypoints_face"][:, :2] * (width, height)
             pose_meta.kps_face_p = meta["keypoints_face"][:, 2]
         return pose_meta
     
+    # read from a meta dictionary and fill the meta class
     def load_from_meta(self, meta, norm_body=True, norm_hand=False):
         
         self.image_id = meta.get("image_id", "00000.png")
@@ -166,6 +178,7 @@ class AAPoseMeta:
         self.kps_rhand = np.array(meta["keypoints_right_hand"])[:, :2]
         self.kps_rhand_p = np.array(meta["keypoints_right_hand"])[:, 2]
 
+    # Probably not used, as it's called once with wring signature --> self.load_from_kp2ds(kp2ds)
     @staticmethod
     def load_from_kp2ds(kp2ds: List[np.ndarray], width: int, height: int): 
         """input 133x3 numpy keypoints and output AAPoseMeta
@@ -195,6 +208,7 @@ class AAPoseMeta:
         pose_meta.kps_face_p = kps_face[:, 2]
         return pose_meta
     
+    # not used
     @staticmethod
     def from_dwpose(dwpose_det_res, height, width):
         pose_meta = AAPoseMeta()
@@ -238,6 +252,7 @@ class AAPoseMeta:
                 kps[:, 0] *= sx
                 kps[:, 1] *= sy
     
+    # not used
     def padding_resize2(self, height=512, width=512):
         """kps will be changed inplace
 
@@ -410,7 +425,7 @@ def _get_max_preds(heatmaps):
     preds = np.where(np.tile(maxvals, (1, 1, 2)) > 0.0, preds, -1)
     return preds, maxvals
 
-
+# used by non used functions (not used)
 def _get_max_preds_3d(heatmaps):
     """Get keypoint predictions from 3D score maps.
 
@@ -448,7 +463,7 @@ def _get_max_preds_3d(heatmaps):
     preds = np.where(maxvals > 0.0, preds, -1)
     return preds, maxvals
 
-
+# not used
 def pose_pck_accuracy(output, target, mask, thr=0.05, normalize=None):
     """Calculate the pose accuracy of PCK for each individual keypoint and the
     averaged accuracy across all keypoints from heatmaps.
@@ -491,7 +506,7 @@ def pose_pck_accuracy(output, target, mask, thr=0.05, normalize=None):
     gt, _ = _get_max_preds(target)
     return keypoint_pck_accuracy(pred, gt, mask, thr, normalize)
 
-
+# used by non used functions (not used)
 def keypoint_pck_accuracy(pred, gt, mask, thr, normalize):
     """Calculate the pose accuracy of PCK for each individual keypoint and the
     averaged accuracy across all keypoints for coordinates.
@@ -530,7 +545,7 @@ def keypoint_pck_accuracy(pred, gt, mask, thr, normalize):
     avg_acc = valid_acc.mean() if cnt > 0 else 0
     return acc, avg_acc, cnt
 
-
+# not used
 def keypoint_auc(pred, gt, mask, normalize, num_step=20):
     """Calculate the pose accuracy of PCK for each individual keypoint and the
     averaged accuracy across all keypoints for coordinates.
@@ -562,7 +577,7 @@ def keypoint_auc(pred, gt, mask, normalize, num_step=20):
         auc += 1.0 / num_step * y[i]
     return auc
 
-
+# note used
 def keypoint_nme(pred, gt, mask, normalize_factor):
     """Calculate the normalized mean error (NME).
 
@@ -585,7 +600,7 @@ def keypoint_nme(pred, gt, mask, normalize_factor):
     distance_valid = distances[distances != -1]
     return distance_valid.sum() / max(1, len(distance_valid))
 
-
+# not used
 def keypoint_epe(pred, gt, mask):
     """Calculate the end-point error.
 
@@ -753,7 +768,7 @@ def _gaussian_blur(heatmaps, kernel=11):
             heatmaps[i, j] *= origin_max / np.max(heatmaps[i, j])
     return heatmaps
 
-
+# not used
 def keypoints_from_regression(regression_preds, center, scale, img_size):
     """Get final keypoint predictions from regression vectors and transform
     them back to the image.
@@ -937,7 +952,7 @@ def keypoints_from_heatmaps(heatmaps,
 
     return preds, maxvals
 
-
+# not used
 def keypoints_from_heatmaps3d(heatmaps, center, scale):
     """Get final keypoint predictions from 3d heatmaps and transform them back
     to the image.
@@ -970,7 +985,7 @@ def keypoints_from_heatmaps3d(heatmaps, center, scale):
                                           [W, H])
     return preds, maxvals
 
-
+# not used
 def multilabel_classification_accuracy(pred, gt, mask, thr=0.5):
     """Get multi-label classification accuracy.
 
@@ -1100,14 +1115,18 @@ def crop(img, center, scale, res):
 
 
 def split_kp2ds_for_aa(kp2ds, ret_face=False):
-    kp2ds_body = (kp2ds[[0, 6, 6, 8, 10, 5, 7, 9, 12, 14, 16, 11, 13, 15, 2, 1, 4, 3, 17, 20]] + kp2ds[[0, 5, 6, 8, 10, 5, 7, 9, 12, 14, 16, 11, 13, 15, 2, 1, 4, 3, 18, 21]]) / 2
-    kp2ds_lhand = kp2ds[91:112]
-    kp2ds_rhand = kp2ds[112:133]
-    kp2ds_face = kp2ds[22:91]
+    # kp2ds_body length is 20
+    kp2ds_body = (kp2ds[[0, 6, 6, 8, 10, 5, 7, 9, 12, 14, 16, 11, 13, 15, 2, 1, 4, 3, 17, 20]] + 
+                  kp2ds[[0, 5, 6, 8, 10, 5, 7, 9, 12, 14, 16, 11, 13, 15, 2, 1, 4, 3, 18, 21]]) / 2
+                  
+    kp2ds_lhand = kp2ds[91:112] # length 21
+    kp2ds_rhand = kp2ds[112:133] # length 21
+    kp2ds_face = kp2ds[22:91] # length 69
     if ret_face:
         return kp2ds_body.copy(), kp2ds_lhand.copy(), kp2ds_rhand.copy(), kp2ds_face.copy()
     return kp2ds_body.copy(), kp2ds_lhand.copy(), kp2ds_rhand.copy()
 
+# not used
 def load_pose_metas_from_kp2ds_seq_list(kp2ds_seq, width, height):
     metas = []
     for kps in kp2ds_seq:

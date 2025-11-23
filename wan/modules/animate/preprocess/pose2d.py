@@ -203,7 +203,7 @@ class Yolo(SimpleOnnxInference):
         # Return the modified input image
         return np.array(results)
 
-    
+    # shape_raw: the original image shape (height, width)
     def process_results(self, results, shape_raw, cat_id=[1], single_person=True):
         if isinstance(results, tuple):
             det_results = results[0]
@@ -229,6 +229,9 @@ class Yolo(SimpleOnnxInference):
             
             results = results[idx_list]
 
+            # here, results contains only the confident person detections
+            # max_bbox_shape contains the maximum height/width among all person detections extracted
+            
             for i in range(results.shape[0]):
                 bbox = results[i]
                 bboxes.append(bbox)
