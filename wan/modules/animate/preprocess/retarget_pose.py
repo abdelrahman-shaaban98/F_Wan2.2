@@ -8,6 +8,9 @@ import math
 from typing import NamedTuple, List
 import copy
 from pose2d_utils import AAPoseMeta
+import logging
+
+logger = logging.getLogger("retarget_pose")
 
 # not used
 # load skeleton name and bone lines
@@ -78,7 +81,6 @@ def get_length(skeleton, limb):
 
 # Transfrom old keypoints by delta, src_H, src_W to get new_keypoints
 def get_handpose_meta(keypoints, delta, src_H, src_W):
-
     new_keypoints = []
 
     for idx, keypoint in enumerate(keypoints):
@@ -105,7 +107,6 @@ def get_handpose_meta(keypoints, delta, src_H, src_W):
 
 # Scales and aligns left/right hand keypoints using bone ratios.
 def deal_hand_keypoints(hand_res, r_ratio, l_ratio, hand_score_th = 0.5):
-
     left_hand = []
     right_hand = []
 
@@ -235,13 +236,23 @@ def get_scaled_pose(canvas, src_canvas, keypoints, keypoints_hand, bone_ratio_li
         # update keypoints
         rescale_keypoints[k2_index - 1] = [end_keypoint_x, end_keypoint_y, rescale_keypoints[k2_index - 1][2]]
 
+    # TO-TEST: I think this if block has no effect
+    # delta_ground_x_offset_first_frame is slways = 0
+    # as we calculate it only on the first frame, 
+    # rescaled_src_ground_x is calculated using the same value (rescale_keypoints[8][0] + rescale_keypoints[11][0]) / 2
     if id == 0:
         if body_flag == 'full_body' and rescale_keypoints[8] != None and rescale_keypoints[11] != None:
             delta_ground_x_offset_first_frame = (rescale_keypoints[8][0] + rescale_keypoints[11][0]) / 2 - rescaled_src_ground_x
             delta_ground_x += delta_ground_x_offset_first_frame
+            print("TEST1")
+            print(delta_ground_x_offset_first_frame)
+
         elif body_flag == 'half_body' and rescale_keypoints[1] != None:
             delta_ground_x_offset_first_frame = rescale_keypoints[1][0] - rescaled_src_ground_x
             delta_ground_x += delta_ground_x_offset_first_frame
+            print("TEST2")
+            print(delta_ground_x_offset_first_frame)
+
 
     # offset all keypoints
     for idx in range(len(rescale_keypoints)):
@@ -326,6 +337,7 @@ def get_scaled_pose(canvas, src_canvas, keypoints, keypoints_hand, bone_ratio_li
 
 # Scales body keypoints according to 'bone_ratio_list'.
 def rescale_skeleton(H, W, keypoints, bone_ratio_list):
+    logger.info(f"rescale_skeleton is called with parameter H={H}, W={W}, keypoints={keypoints}, bone_ratio_list={bone_ratio_list}")
 
     rescale_keypoints = keypoints.copy()
 
@@ -387,8 +399,12 @@ def rescale_skeleton(H, W, keypoints, bone_ratio_list):
 
 # Repairs missing body joints by mirroring symmetric limbs.
 def fix_lack_keypoints_use_sym(skeleton):
+    logger.info("fix_lack_keypoints_use_sym is called")
 
     keypoints = skeleton['keypoints_body']
+
+    # logger.info(f"keypoints_body before editing: {keypoints}")
+
     H, W = skeleton['height'], skeleton['width']
 
     limb_points_list = [
@@ -470,12 +486,16 @@ def fix_lack_keypoints_use_sym(skeleton):
                     skeleton['keypoints_body'][k2_index - 1] = [0, 0] #init
                     skeleton['keypoints_body'][k2_index - 1][0] = skeleton['keypoints_body'][k1_index - 1][0]
                     skeleton['keypoints_body'][k2_index - 1][1] = skeleton['keypoints_body'][k1_index - 1][1] + ref_length / H
+
+    # logger.info(f"keypoints_body after editing: {keypoints}")
+    
     return skeleton
 
 
 # Each limb has right and left mirrors, adjust the shorter limb to match the longer one.
 # Changes ratio_list only, src_length_lista and dst_length_list are not affected.
 def rescale_shorten_skeleton(ratio_list, src_length_list, dst_length_list):
+    logger.info(f"rescale_shorten_skeleton is called with parameters ratio_list={ratio_list}")
 
     modify_bone_list = [
         # each elemnt in the list is a pair between a left and a right limb
@@ -513,6 +533,7 @@ def rescale_shorten_skeleton(ratio_list, src_length_list, dst_length_list):
 
 #Determines if skeleton is full-body, ¾, or half-body based on visible keypoints.
 def check_full_body(keypoints, threshold = 0.4):
+    logger.info("check_full_body is called")
 
     body_flag = 'half_body'
 
@@ -535,6 +556,8 @@ def check_full_body(keypoints, threshold = 0.4):
 # Check two body flags and return the minimum
 # If given 'full_body' and 'half_body", it returns 'half_body'
 def check_full_body_both(flag1, flag2):
+    logger.info("check_full_body_both is called")
+
     body_flag_dict = {
         'full_body': 2,
         'three_quarter_body' : 1,
@@ -554,6 +577,8 @@ def check_full_body_both(flag1, flag2):
 
 
 def write_to_poses(data_to_json, none_idx, dst_shape, bone_ratio_list, delta_ground_x, delta_ground_y, rescaled_src_ground_x, body_flag, scale_min):
+    logger.info("write_to_poses is called")
+
     outputs = []
     length = len(data_to_json)
     for id in tqdm(range(length)):
@@ -585,6 +610,8 @@ def write_to_poses(data_to_json, none_idx, dst_shape, bone_ratio_list, delta_gro
 
 # Calculates global scale difference between two skeletons based on head width or shoulders.
 def calculate_scale_ratio(skeleton, skeleton_edit, scale_ratio_flag):
+    logger.info("calculate_scale_ratio is called")
+
     if scale_ratio_flag:
         # [0, 14, 15, 16, 17] --> [Nose, REye, LEye, REar, LEar] --> head keypoints 
         headw = max(skeleton['keypoints_body'][0][0], skeleton['keypoints_body'][14][0], skeleton['keypoints_body'][15][0], skeleton['keypoints_body'][16][0], skeleton['keypoints_body'][17][0]) - \
@@ -605,6 +632,7 @@ def calculate_scale_ratio(skeleton, skeleton_edit, scale_ratio_flag):
 
 
 def retarget_pose(src_skeleton, dst_skeleton, all_src_skeleton, src_skeleton_edit, dst_skeleton_edit, threshold=0.4):
+    logger.info("retarget_pose is called")
 
     if src_skeleton_edit is not None and dst_skeleton_edit is not None:
         use_edit_for_base = True
@@ -614,6 +642,10 @@ def retarget_pose(src_skeleton, dst_skeleton, all_src_skeleton, src_skeleton_edi
     src_skeleton_ori = copy.deepcopy(src_skeleton)
 
     dst_skeleton_ori_h, dst_skeleton_ori_w = dst_skeleton['height'], dst_skeleton['width']
+
+    # Calculate scale_min
+    # scale_min is used to transform the dst image from its space to the src image space, compensating for any far/close differences in the two images
+
     # [0]  --> nose
     # [10] --> right ankle
     # [13] --> left ankle
@@ -630,7 +662,11 @@ def retarget_pose(src_skeleton, dst_skeleton, all_src_skeleton, src_skeleton_edi
         dst_height = dst_skeleton['height'] * abs(
             (dst_skeleton['keypoints_body'][10][1] + dst_skeleton['keypoints_body'][13][1]) / 2 -
             dst_skeleton['keypoints_body'][0][1])
+    
         scale_min = 1.0 * src_height / dst_height
+
+        logger.info(f"scale_min is computed using the distance between the nose and the midpoint of the ankles with value: {scale_min}")
+
 
     elif src_skeleton['keypoints_body'][0] != None and src_skeleton['keypoints_body'][8] != None and src_skeleton['keypoints_body'][11] != None and \
         dst_skeleton['keypoints_body'][0] != None and dst_skeleton['keypoints_body'][8] != None and dst_skeleton['keypoints_body'][11] != None and \
@@ -643,9 +679,16 @@ def retarget_pose(src_skeleton, dst_skeleton, all_src_skeleton, src_skeleton_edi
         dst_height = dst_skeleton['height'] * abs(
             (dst_skeleton['keypoints_body'][8][1] + dst_skeleton['keypoints_body'][11][1]) / 2 -
             dst_skeleton['keypoints_body'][0][1])
+        
         scale_min = 1.0 * src_height / dst_height
+
+        logger.info(f"scale_min is computed using the distance between the nose and the midpoint of the hips with value: {scale_min}")
+
     else:
         scale_min = np.sqrt(src_skeleton['height'] * src_skeleton['width']) / np.sqrt(dst_skeleton['height'] * dst_skeleton['width'])
+
+        logger.info(f"scale_min is computed using the src and dst images shape with value: {scale_min}")
+
     
     if use_edit_for_base:
         scale_ratio_flag = False
@@ -662,7 +705,10 @@ def retarget_pose(src_skeleton, dst_skeleton, all_src_skeleton, src_skeleton_edi
             dst_height_edit = dst_skeleton_edit['height'] * abs(
                 (dst_skeleton_edit['keypoints_body'][10][1] + dst_skeleton_edit['keypoints_body'][13][1]) / 2 -
                 dst_skeleton_edit['keypoints_body'][0][1])
+            
             scale_min_edit = 1.0 * src_height_edit / dst_height_edit
+
+            logger.info(f"scale_min_edit is computed using the distance between the nose and the midpoint of the ankles with value: {scale_min_edit}")
 
         # [0, 8, 11] --> [Nose, RHip, LHip]
         # So, it calculates the height as the distance between the Nose and the midpoint of RHip and LHip
@@ -677,18 +723,26 @@ def retarget_pose(src_skeleton, dst_skeleton, all_src_skeleton, src_skeleton_edi
             dst_height_edit = dst_skeleton_edit['height'] * abs(
                 (dst_skeleton_edit['keypoints_body'][8][1] + dst_skeleton_edit['keypoints_body'][11][1]) / 2 -
                 dst_skeleton_edit['keypoints_body'][0][1])
+            
             scale_min_edit = 1.0 * src_height_edit / dst_height_edit
-        
+
+            logger.info(f"scale_min_edit is computed using the distance between the nose and the midpoint of the hips with value: {scale_min_edit}")
+
         # If the ankles and hips not in the extracted keypoints, use height and width to get the scale ratio
         # and by making scale_ratio_flag = True, it will use the heads or shoulders width to get an estimate for the ratio
         else:
             scale_min_edit = np.sqrt(src_skeleton_edit['height'] * src_skeleton_edit['width']) / np.sqrt(dst_skeleton_edit['height'] * dst_skeleton_edit['width'])
             scale_ratio_flag = True
-        
+
+            logger.info(f"scale_min_edit is computed using the src and dst images shape with value: {scale_min_edit}")
+
+
         # Flux may change the scale, compensate for it here
         ratio_src = calculate_scale_ratio(src_skeleton, src_skeleton_edit, scale_ratio_flag)
         ratio_dst = calculate_scale_ratio(dst_skeleton, dst_skeleton_edit, scale_ratio_flag)
+        logger.info("calculate_scale_ratio")
 
+        logger.info("Use scale_min_edit to transform the edit dst image from its space to the edit src image space")
         dst_skeleton_edit['height'] = int(dst_skeleton_edit['height'] * scale_min_edit)
         dst_skeleton_edit['width'] = int(dst_skeleton_edit['width'] * scale_min_edit)
         for idx in range(len(dst_skeleton_edit['keypoints_left_hand'])):
@@ -698,6 +752,7 @@ def retarget_pose(src_skeleton, dst_skeleton, all_src_skeleton, src_skeleton_edi
             dst_skeleton_edit['keypoints_right_hand'][idx][0] *= scale_min_edit
             dst_skeleton_edit['keypoints_right_hand'][idx][1] *= scale_min_edit
     
+    logger.info("Use scale_min to transform the original dst image from its space to the original src image space")
 
     dst_skeleton['height'] = int(dst_skeleton['height'] * scale_min)
     dst_skeleton['width'] = int(dst_skeleton['width'] * scale_min)
@@ -712,6 +767,11 @@ def retarget_pose(src_skeleton, dst_skeleton, all_src_skeleton, src_skeleton_edi
     dst_body_flag = check_full_body(dst_skeleton['keypoints_body'], threshold)
     src_body_flag = check_full_body(src_skeleton_ori['keypoints_body'], threshold)
     body_flag = check_full_body_both(dst_body_flag, src_body_flag)
+
+    logger.info(f"dst_body_flag: {dst_body_flag}")
+    logger.info(f"src_body_flag: {src_body_flag}")
+    logger.info(f"body_flag: {body_flag}")
+
     #print('body_flag: ', body_flag)
 
     if use_edit_for_base:
@@ -728,17 +788,26 @@ def retarget_pose(src_skeleton, dst_skeleton, all_src_skeleton, src_skeleton_edi
             dst_skeleton['keypoints_body'][idx] = None
             none_idx.append(idx)
 
+    logger.info(f"none_idx ldngth: {len(none_idx)}")
+    logger.info(f"List of keypoint indices that do not exist: {none_idx}")
+
+
     # get bone ratio list
+    logger.info("Looping through limbSeq to get the limb ratio list")
+
     ratio_list, src_length_list, dst_length_list = [], [], []
     for idx, limb in enumerate(limbSeq):
+        logger.info(f"For limb ratio of index: {idx}")
         if use_edit_for_base:
             src_X, src_Y, src_length = get_length(src_skeleton_edit, limb)
             dst_X, dst_Y, dst_length = get_length(dst_skeleton_edit, limb)
 
             if src_X is None or src_Y is None or dst_X is None or dst_Y is None:
                 ratio = -1
+                logger.info("ratio is -1 as src_X is None or src_Y is None or dst_X is None or dst_Y is None")
             else:
                 ratio = 1.0 * dst_length * ratio_dst / src_length / ratio_src
+                logger.info(f"src_length: {src_length}, ratio_src: {ratio_src}, dst_length: {dst_length}, ratio_dst: {ratio_dst}. ratio: {ratio}")
         
         else:
             src_X, src_Y, src_length = get_length(src_skeleton, limb)
@@ -746,8 +815,12 @@ def retarget_pose(src_skeleton, dst_skeleton, all_src_skeleton, src_skeleton_edi
 
             if src_X is None or src_Y is None or dst_X is None or dst_Y is None:
                 ratio = -1
+                logger.info("ratio is -1 as src_X is None or src_Y is None or dst_X is None or dst_Y is None")
             else:
                 ratio = 1.0 * dst_length / src_length
+                logger.info(f"src_length: {src_length}, dst_length: {dst_length}. ratio: {ratio}")
+
+        # logger.info(f"The calculated ratio for limb index {idx}: {ratio}")
 
         ratio_list.append(ratio)
         src_length_list.append(src_length)
@@ -755,25 +828,29 @@ def retarget_pose(src_skeleton, dst_skeleton, all_src_skeleton, src_skeleton_edi
     
     # if a limb ratio is missing, replace it with the average of the shoulder limbs length
     for idx, ratio in enumerate(ratio_list):
-        print(1)
         if ratio == -1:
-            print(idx)
+            logger.info(f"Limb ratio for index {idx} is missing")
             if ratio_list[0] != -1 and ratio_list[1] != -1:
                 ratio_list[idx] = (ratio_list[0] + ratio_list[1]) / 2
-                print(idx, ratio_list[idx])
+                logger.info(f"Replace the missing limb ratio by {ratio_list[idx]}")
+
 
     # Consider adding constraints when Flux fails to correct head pose, causing neck issues.
     # if ratio_list[12] > (ratio_list[0]+ratio_list[1])/2*1.25:
     #     ratio_list[12] = (ratio_list[0]+ratio_list[1])/2*1.25
     
     # Changes ratio_list only, src_length_list and dst_length_list are not affected.
+    logger.info("rescale_shorten_skeleton")
     ratio_list, src_length_list, dst_length_list = rescale_shorten_skeleton(ratio_list, src_length_list, dst_length_list)
 
+    logger.info("rescale_skeleton")
     rescaled_src_skeleton_ori = rescale_skeleton(src_skeleton_ori['height'], src_skeleton_ori['width'],
                                                  src_skeleton_ori['keypoints_body'], ratio_list)
 
     # get global translation offset_x and offset_y
 
+    logger.info("Get global translation delta_x and delta_y" +
+                " which are the distance between the characters position in the first frame and the reference image")
     # [10] --> right ankle
     # [13] --> left ankle
     # [8]  --> right hip
@@ -782,7 +859,9 @@ def retarget_pose(src_skeleton, dst_skeleton, all_src_skeleton, src_skeleton_edi
     # [19] --> right toe
     ##################################################
     if body_flag == 'full_body':
+        logger.info("Body flag is full_body, use foot mark")
         #print('use foot mark.')
+        
         dst_ground_y = max(dst_skeleton['keypoints_body'][10][1], dst_skeleton['keypoints_body'][13][1]) * dst_skeleton[
             'height']
         # The midpoint between toe and ankle
@@ -797,10 +876,12 @@ def retarget_pose(src_skeleton, dst_skeleton, all_src_skeleton, src_skeleton_edi
         dst_ground_x = (dst_skeleton['keypoints_body'][8][0] + dst_skeleton['keypoints_body'][11][0]) * dst_skeleton[
             'width'] / 2
         rescaled_src_ground_x = (rescaled_src_skeleton_ori[8][0] + rescaled_src_skeleton_ori[11][0]) / 2
+
         delta_ground_x = rescaled_src_ground_x - dst_ground_x
         delta_x, delta_y = delta_ground_x, delta_ground_y
 
     else:
+        logger.info("Body flag is not full_body, use neck mark")
         #print('use neck mark.')
         # use neck keypoint as mark
         src_neck_y = rescaled_src_skeleton_ori[1][1]
@@ -810,17 +891,23 @@ def retarget_pose(src_skeleton, dst_skeleton, all_src_skeleton, src_skeleton_edi
         src_neck_x = rescaled_src_skeleton_ori[1][0]
         dst_neck_x = dst_skeleton['keypoints_body'][1][0]
         delta_neck_x = src_neck_x - dst_neck_x * dst_skeleton['width']
+
         delta_x, delta_y = delta_neck_x, delta_neck_y
         rescaled_src_ground_x = src_neck_x
+    
+    logger.info(f"delta_x: {delta_x}, delta_y: {delta_y}")
     ##################################################
 
     dst_shape = (dst_skeleton_ori_w, dst_skeleton_ori_h)
     output = write_to_poses(all_src_skeleton, none_idx, dst_shape, ratio_list, delta_x, delta_y,
                                 rescaled_src_ground_x, body_flag, scale_min)
+    # output = write_to_poses(all_src_skeleton, none_idx, dst_shape, ratio_list, 0, 0,
+    #                             0, body_flag, scale_min)
     return output
 
 
 def get_retarget_pose(tpl_pose_meta0, refer_pose_meta, tpl_pose_metas, tql_edit_pose_meta0, refer_edit_pose_meta):
+    logger.info("get_retarget_pose is called")
 
     # Denormalize the hands keypoints, and convert from ndarray to list
     for key, value in tpl_pose_meta0.items():

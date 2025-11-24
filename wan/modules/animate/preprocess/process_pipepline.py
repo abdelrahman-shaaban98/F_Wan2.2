@@ -5,7 +5,7 @@ import shutil
 import torch
 from diffusers import FluxKontextPipeline
 import cv2
-from loguru import logger
+# from loguru import logger
 from PIL import Image
 try:
     import moviepy.editor as mpy
@@ -23,7 +23,9 @@ transformer.USE_FLASH_ATTN = False
 transformer.MATH_KERNEL_ON = True
 transformer.OLD_GPU = True
 from sam_utils import build_sam2_video_predictor
+import logging
 
+logger = logging.getLogger("process_pipeline")
 
 class ProcessPipeline():
     def __init__(self, det_checkpoint_path, pose2d_checkpoint_path, sam_checkpoint_path, flux_kontext_path):
@@ -36,6 +38,9 @@ class ProcessPipeline():
             self.flux_kontext = FluxKontextPipeline.from_pretrained(flux_kontext_path, torch_dtype=torch.bfloat16).to("cuda")
 
     def __call__(self, video_path, refer_image_path, output_path, resolution_area=[1280, 720], fps=30, iterations=3, k=7, w_len=1, h_len=1, retarget_flag=False, use_flux=False, replace_flag=False):
+        
+        logger.info("Method __call__ from ProcessPipeline is called")
+
         if replace_flag:
 
             video_reader = VideoReader(video_path)
@@ -124,13 +129,16 @@ class ProcessPipeline():
             mpy.ImageSequenceClip(aug_masks_new, fps=fps).write_videofile(src_mask_path)
             return True
         else:
-            logger.info(f"Processing reference image: {refer_image_path}")
+            logger.info(f"Processing reference image in animation mode: {refer_image_path}")
+
             refer_img = cv2.imread(refer_image_path)
             src_ref_path = os.path.join(output_path, 'src_ref.png')
             shutil.copy(refer_image_path, src_ref_path)
             refer_img = refer_img[..., ::-1]
             
+            logger.info(f"Original reference image shape: {refer_img.shape}")
             refer_img = resize_by_area(refer_img, resolution_area[0] * resolution_area[1], divisor=16)
+            logger.info(f"Resized by area reference image shape: {refer_img.shape}")
             
             refer_pose_meta = self.pose2d([refer_img])[0]
 
@@ -160,6 +168,11 @@ class ProcessPipeline():
             idxs = get_frame_indices(frame_num, video_fps, target_num, fps)
             frames = video_reader.get_batch(idxs).asnumpy()
 
+            logger.info(f"video_fps: {video_fps}")
+            logger.info(f"frame_num: {frame_num}")
+            logger.info(f"fps: {fps}")
+            logger.info(f"target_num: {target_num}")
+
             logger.info(f"Processing pose meta")
 
             tpl_pose_meta0 = self.pose2d(frames[:1])[0]
@@ -167,7 +180,7 @@ class ProcessPipeline():
 
             ##################################################
             # Saving original video
-            print("Saving original video")
+            logger.info("Saving original video")
             tpl_pose_metas_to_save = [AAPoseMeta.from_humanapi_meta(meta) for meta in tpl_pose_metas]
 
             tpl_pose_metas_list_to_save = []
@@ -179,33 +192,27 @@ class ProcessPipeline():
 
             original_video_pose_path = os.path.join(output_path, 'original_video_pose.mp4')
             mpy.ImageSequenceClip(tpl_pose_metas_list_to_save, fps=fps).write_videofile(original_video_pose_path)
-            ##################################################
 
-            ##################################################
             # Saving original first frame
-            print("Saving original first frame")
+            logger.info("Saving original first frame with pose")
             tpl_pose_meta0_so_save = AAPoseMeta.from_humanapi_meta(tpl_pose_meta0)
-
-            # canvas = np.zeros_like(frames[0])
             image = draw_aapose_by_meta_new(frames[0].copy(), tpl_pose_meta0_so_save) 
 
             image = Image.fromarray(image)
             image_path = os.path.join(output_path, 'original_first_frame_pose.png')
             image.save(image_path)
-            ##################################################
 
-            ##################################################
             # Saving original refer image
-            print("Saving original refer image")
+            logger.info("Saving original refer image with pose")
             refer_pose_meta_so_save = AAPoseMeta.from_humanapi_meta(refer_pose_meta)
-
-            # canvas = np.zeros_like(refer_img)
             image = draw_aapose_by_meta_new(refer_img.copy(), refer_pose_meta_so_save) 
 
             image = Image.fromarray(image)
             image_path = os.path.join(output_path, 'original_refer_pose.png')
             image.save(image_path)
             ##################################################
+
+            logger.info("Extracting face boxes from video frames")
 
             face_images = []
             for idx, meta in enumerate(tpl_pose_metas):
@@ -217,9 +224,15 @@ class ProcessPipeline():
                 face_image = cv2.resize(face_image, (512, 512))
                 face_images.append(face_image)
 
+            logger.info(f"Number of face boxes extracted: {len(face_images)}")
+
             if retarget_flag:
                 if use_flux:
+                    logger.info("Generate the condition frames with Flux retargeting")
                     tpl_prompt, refer_prompt = self.get_editing_prompts(tpl_pose_metas, refer_pose_meta)
+                    logger.info(f"tpl_prompt: {tpl_prompt}")
+                    logger.info(f"refer_prompt: {refer_prompt}")
+
                     refer_input = Image.fromarray(refer_img)
                     refer_edit = self.flux_kontext(
                             image=refer_input,
@@ -230,7 +243,11 @@ class ProcessPipeline():
                             num_inference_steps=28,
                         ).images[0]
                     
+                    logger.info(f"refer_edit shape after outputed from FLux: {refer_edit.shape}")
+                    
                     refer_edit = Image.fromarray(padding_resize(np.array(refer_edit), refer_img.shape[0], refer_img.shape[1]))
+                    logger.info(f"refer_edit shape after resizing: {refer_edit.shape}")
+
                     refer_edit_path = os.path.join(output_path, 'refer_edit.png')
                     refer_edit.save(refer_edit_path)
                     refer_edit_pose_meta = self.pose2d([np.array(refer_edit)])[0]
@@ -247,24 +264,28 @@ class ProcessPipeline():
                             num_inference_steps=28,
                         ).images[0]
                     
+                    logger.info(f"tpl_edit shape after outputed from FLux: {tpl_edit.shape}")
+
                     tpl_edit = Image.fromarray(padding_resize(np.array(tpl_edit), tpl_img.shape[0], tpl_img.shape[1]))
+                    logger.info(f"tpl_edit shape after resizing: {tpl_edit.shape}")
+
                     tpl_edit_path = os.path.join(output_path, 'tpl_edit.png')
                     tpl_edit.save(tpl_edit_path)
                     tpl_edit_pose_meta0 = self.pose2d([np.array(tpl_edit)])[0]
 
                     ##################################################
-                    # Saving original first frame
-                    print("Saving edit first frame")
+                    # Saving edit first frame with pose
+                    logger.info("Saving edit first frame with pose")
+
                     tpl_edit_pose_meta0_to_save = AAPoseMeta.from_humanapi_meta(tpl_edit_pose_meta0)
                     image = draw_aapose_by_meta_new(np.array(tpl_edit.copy()), tpl_edit_pose_meta0_to_save)
                     image = Image.fromarray(image)
                     image_path = os.path.join(output_path, 'edit_first_frame_pose.png')
                     image.save(image_path)
-                    ##################################################
 
-                    ##################################################
-                    # Saving original refer image
-                    print("Saving edit refer image")
+                    # Saving edit refer image with pose
+                    logger.info("Saving edit refer image with pose")
+
                     refer_edit_pose_meta_to_save = AAPoseMeta.from_humanapi_meta(refer_edit_pose_meta)
                     image = draw_aapose_by_meta_new(np.array(refer_edit.copy()), refer_edit_pose_meta_to_save)
                     image = Image.fromarray(image)
@@ -274,10 +295,14 @@ class ProcessPipeline():
 
                     tpl_retarget_pose_metas = get_retarget_pose(tpl_pose_meta0, refer_pose_meta, tpl_pose_metas, tpl_edit_pose_meta0, refer_edit_pose_meta)
                 else:
+                    logger.info("Generate the condition frames with basic retargeting")
                     tpl_retarget_pose_metas = get_retarget_pose(tpl_pose_meta0, refer_pose_meta, tpl_pose_metas, None, None)
             else:
-               # transform from meta dictionary to meta class
-               tpl_retarget_pose_metas = [AAPoseMeta.from_humanapi_meta(meta) for meta in tpl_pose_metas]
+                logger.info("Generate the condition frames with no retargeting")
+                # transform from meta dictionary to meta class
+                tpl_retarget_pose_metas = [AAPoseMeta.from_humanapi_meta(meta) for meta in tpl_pose_metas]
+
+            logger.info("Generating the condition frames by drawing the pose on black canvas")
 
             cond_images = []
             for idx, meta in enumerate(tpl_retarget_pose_metas):
@@ -290,6 +315,8 @@ class ProcessPipeline():
                     conditioning_image = padding_resize(conditioning_image, refer_img.shape[0], refer_img.shape[1])
 
                 cond_images.append(conditioning_image)
+
+            logger.info(f"Number of condition frames extracted: {len(cond_images)}")
 
             src_face_path = os.path.join(output_path, 'src_face.mp4')
             mpy.ImageSequenceClip(face_images, fps=fps).write_videofile(src_face_path)

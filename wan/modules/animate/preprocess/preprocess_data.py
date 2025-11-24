@@ -2,6 +2,15 @@
 import os
 import argparse
 from process_pipepline import ProcessPipeline
+import logging
+
+# Configure logging
+logging.basicConfig(
+    filename="app.log",   
+    filemode="w",    
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 
 
 def _parse_args():
@@ -95,6 +104,9 @@ if __name__ == '__main__':
     args = _parse_args()
     args_dict = vars(args)
     print(args_dict)
+
+    logger = logging.getLogger("preprocess_data")
+
 
     assert len(args.resolution_area) == 2, "resolution_area should be a list of two integers [width, height]"
     assert not args.use_flux or args.retarget_flag, "Image editing with FLUX can only be used when pose retargeting is enabled."
